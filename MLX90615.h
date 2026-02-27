@@ -54,6 +54,8 @@ class MLX90615
 		MLX90615(uint8_t i2caddr = MLX90615_I2CDEFAULTADDR);
 
 		boolean begin(void);
+		boolean sleep(void);
+		boolean wakeUp(void);
 
 		float getEmissivity(void);
 		uint8_t getIIR(void);

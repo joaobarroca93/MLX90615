@@ -27,6 +27,65 @@ boolean MLX90615::begin(void)
 	return _ready = true;
 }
 
+/*
+ * \brief   Turn the sensor to sleep mode.
+ * \remarks
+ * \li      Send command 0xC6 with PEC to enter sleep mode.
+ * \li      SCL is held high during sleep mode (per datasheet).
+ */
+boolean MLX90615::sleep(void)
+{
+    CRC8 crc(MLX90615_CRC8POLY);
+
+    // Build the CRC-8 of all bytes to be sent.
+    crc.crc8(_addr << 1);
+    _crc8 = crc.crc8(MLX90615_SLEEP_MODE);
+
+    // Send the slave address then the sleep command with PEC.
+    Wire.beginTransmission(_addr);
+    Wire.write(MLX90615_SLEEP_MODE);
+    Wire.write(_crc8);
+    _rwError |= (1 << Wire.endTransmission(true)) >> 1;
+
+    // Keep SCL high during sleep mode (per datasheet requirement).
+    pinMode(A5, OUTPUT);
+    pinMode(A4, OUTPUT);
+    digitalWrite(A5, HIGH);
+    digitalWrite(A4, LOW);
+
+    // Clear r/w errors if using broadcast address.
+    if(_addr == MLX90615_BROADCASTADDR) _rwError &= MLX90615_NORWERROR;
+
+    return true;
+}
+
+/*
+ * \brief   Wake the sensor from sleep mode.
+ * \remarks
+ * \li      Drive SCL low for at least 8ms, then release both I2C pins
+ *          before reinitializing Wire. SDA was held low during sleep and
+ *          must be released or Wire.begin() cannot reconfigure the bus.
+ * \li      Data is ready ~0.3s after waking.
+ */
+boolean MLX90615::wakeUp(void)
+{
+    // Drive SCL low for at least 8ms to trigger wake-up.
+    pinMode(A5, OUTPUT);
+    digitalWrite(A5, LOW);
+    delay(10);
+
+    // Release both I2C pins before handing control back to Wire.
+    // If SDA remains driven low, Wire.begin() cannot reinitialize the bus.
+    pinMode(A4, INPUT);
+    pinMode(A5, INPUT);
+
+    // Reinitialize I2C and wait for sensor to be ready (typ. 0.3s).
+    Wire.begin();
+    delay(400);
+
+    return MLX90615::begin();
+}
+
 /**
  *  \brief             Return a temperature from the specified source in specified units.
  *  \remarks
